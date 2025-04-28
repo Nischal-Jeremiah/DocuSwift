@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DocuSwift - Upload & Manage Documents</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background-color: #f7f9fc;
+            text-align: center;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            width: 450px;
+            margin: auto;
+        }
+        input, button {
+            margin: 10px;
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #message {
+            margin-top: 20px;
+            color: green;
+            font-weight: bold;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+            margin-top: 20px;
+        }
+        li {
+            margin: 10px 0;
+        }
+        a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>📄 DocuSwift - Document Manager</h1>
+
+    <div class="container">
+        <h2>Upload a Document</h2>
+
+        <input type="file" id="fileInput" />
+        <br/>
+        <button onclick="uploadFile()">Upload</button>
+
+        <div id="message"></div>
+
+        <hr/>
+
+        <h2>Documents</h2>
+        <button onclick="listFiles()">Refresh List</button>
+
+        <ul id="fileList"></ul>
+
+    </div>
+
+    <script>
+        const API_BASE_URL = 'https://7rmg1nk8e6.execute-api.eu-north-1.amazonaws.com/prod'; // Update if needed
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select a file first!');
+                return;
+            }
+
+            const reader = new FileReader();
+
+            reader.onload = async function(event) {
+                const base64String = event.target.result.split(',')[1]; 
+
+                const payload = {
+                    file_base64: base64String,
+                    file_name: file.name
+                };
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/upload`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        document.getElementById('message').innerText = "✅ " + data.message;
+                        fileInput.value = '';
+                        listFiles();
+                    } else {
+                        document.getElementById('message').innerText = "❌ Error: " + data.error;
+                    }
+                } catch (error) {
+                    document.getElementById('message').innerText = "❌ Error: " + error.message;
+                }
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        async function listFiles() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/list`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                const fileList = document.getElementById('fileList');
+                fileList.innerHTML = ''; 
+
+                if (data.files && data.files.length > 0) {
+                    data.files.forEach(file => {
+                        const li = document.createElement('li');
+                        const link = document.createElement('a');
+                        link.href = "#";
+                        link.innerText = file;
+                        link.onclick = async function() {
+                            await downloadFile(file);
+                        };
+                        li.appendChild(link);
+                        fileList.appendChild(li);
+                    });
+                } else {
+                    fileList.innerHTML = '<li>No documents uploaded yet.</li>';
+                }
+            } catch (error) {
+                alert('Error fetching file list: ' + error.message);
+            }
+        }
+
+        async function downloadFile(fileName) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/download`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ file_name: fileName })
+                });
+
+                const data = await response.json();
+
+                if (data.download_url) {
+                    window.open(data.download_url, '_blank');
+                } else {
+                    alert('❌ Failed to get download link.');
+                }
+            } catch (error) {
+                alert('❌ Failed to get download link: ' + error.message);
+            }
+        }
+
+        window.onload = listFiles;
+    </script>
+
+</body>
+</html>
